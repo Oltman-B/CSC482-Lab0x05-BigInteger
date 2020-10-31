@@ -15,6 +15,16 @@ namespace CSC482_Lab0x05_BigInteger
             _value = new StringBuilder(bigInteger);
         }
 
+        public MyBigInteger(int numDigits)
+        {
+            _value = new StringBuilder();
+            Random rand = new Random();
+            for (int i = 0; i < numDigits; i++)
+            {
+                _value.Append(rand.Next('0', '9'));
+            }
+        }
+
         public int GetLength()
         {
             return _value.Length;
@@ -35,6 +45,33 @@ namespace CSC482_Lab0x05_BigInteger
                     _value.Insert(0, "0");
                 }
             }
+        }
+
+        public void RunTimeTests()
+        {
+            var benchmarker = new AlgorithmBenchmarker();
+            
+            benchmarker.AddAlgorithmToBenchmark(Plus, PlusDoublingCalc);
+            benchmarker.AddAlgorithmToBenchmark(Times, TimesDoublingCalc);
+
+            benchmarker.RunTimeTests();
+        }
+
+        public bool RunVerificationTests()
+        {
+          var sumTestExpected = new MyBigInteger("1000000000000000000000111");
+          var productTestExpected = new MyBigInteger("111000000000000000000000000");
+          var testA = new MyBigInteger("1000000000000000000000000");
+          var testB = new MyBigInteger("111");
+          if (testA + testB != sumTestExpected) return false;
+          if (testA * testB != productTestExpected) return false;
+
+          return true;
+        }
+
+        public MyBigInteger Plus(MyBigInteger valA, MyBigInteger valB)
+        {
+            return valA + valB;
         }
 
         public MyBigInteger Plus(MyBigInteger valB)
@@ -69,10 +106,27 @@ namespace CSC482_Lab0x05_BigInteger
             if (carry != 0) result.Insert(0, DigitToAscii(carry));
             return new MyBigInteger(result.ToString());
         }
+
+        public void PlusDoublingCalc(AlgStats algStats)
+        {
+            // Only calculate doubling ratios for even values of n and if n/2 exists in prev times table.
+            if (algStats.n % 2 == 0 && algStats.PrevTimesTable.TryGetValue(algStats.n / 2, out double halfTime))
+            {
+                algStats.ActualDoublingRatio = (algStats.TimeMicro / halfTime);
+                algStats.ExpectedDoublingRatio = algStats.n / ((double)algStats.n / 2);
+            }
+            else
+            {
+                algStats.ActualDoublingRatio = -1;
+                algStats.ExpectedDoublingRatio = -1;
+            }
+        }
+
         public MyBigInteger Times(MyBigInteger valB)
         {
             // Got some guidance from (https://www.geeksforgeeks.org/multiply-large-numbers-represented-as-strings/)
-            // I want to spend some time coming up with a new solution before attempting the fast multiplication algorithm
+            // Faster than using MyBigInteger Plus() method. Keeps a running result in an array rather than creating
+            // temporary big integer or string to hold result for use in Plus().
 
             // Handle exceptional cases that can avoid entering the loops.
             if(this.GetLength() == 0 || valB.GetLength() == 0) return new MyBigInteger("0");
@@ -90,33 +144,38 @@ namespace CSC482_Lab0x05_BigInteger
             // max width of result is 2x size of longest value, values are padded so just 2x this.Length
             int[] multiplicationSum = new int[this.GetLength() * 2];
 
-            int thisIndx = 0;
+            // Used to keep track of the correct offset since each iteration of the sum pass will
+            // need to be shifted by a power of 10 so correct digits can be added.
+            int power10Offset = 0;
             for (int i = GetLength() - 1; i >= 0; i--)
             {
                 int carry = 0;
                 int digA = AsciiToDigit(this.GetDigitChar(i));
 
-                int valBindx = 0;
+                int currentSumDigitIdx = 0;
                 for (int j = GetLength() - 1; j >= 0; j--)
                 {
                     int digB = AsciiToDigit(valB.GetDigitChar(j));
 
-                    int sum = digA * digB + multiplicationSum[thisIndx + valBindx] + carry;
+                    // Keeping running total sum in multiplicationSum Array, so need to add previous value stored in
+                    // multSum[thisindx + valbIndx] to current sum. Power10Offset keeps track of starting index.
+                    int sum = digA * digB + multiplicationSum[power10Offset + currentSumDigitIdx] + carry;
 
                     carry = sum / 10;
 
-                    multiplicationSum[thisIndx + valBindx] = sum % 10;
+                    multiplicationSum[power10Offset + currentSumDigitIdx] = sum % 10;
 
-                    // Multiply each digit in b by the current digit of this (a)
-                    valBindx++;
+                    // Multiply and add each digit in b by the current digit of this (a)
+                    currentSumDigitIdx++;
                 }
 
                 if (carry > 0)
                 {
-                    multiplicationSum[thisIndx + valBindx] += carry;
+                    multiplicationSum[power10Offset + currentSumDigitIdx] += carry;
                 }
 
-                thisIndx++;
+                // Shift next addition by 1 digit (power of 10).
+                power10Offset++;
             }
             // Count leading 0 in unused section of result
             int zeroCount = 0;
@@ -125,12 +184,33 @@ namespace CSC482_Lab0x05_BigInteger
                 zeroCount++;
             }
 
+            // Only build new result string such that leading zeroes are ignored.
             for (int i = multiplicationSum.Length - zeroCount - 1; i >= 0; i--)
             {
                 result.Append(DigitToAscii(multiplicationSum[i]));
             }
 
             return new MyBigInteger(result.ToString());
+        }
+
+        public MyBigInteger Times(MyBigInteger valA, MyBigInteger valB)
+        {
+            return valA * valB;
+        }
+
+        public void TimesDoublingCalc(AlgStats algStats)
+        {
+            // Only calculate doubling ratios for even values of n and if n/2 exists in prev times table.
+            if (algStats.n % 2 == 0 && algStats.PrevTimesTable.TryGetValue(algStats.n / 2, out double halfTime))
+            {
+                algStats.ActualDoublingRatio = (algStats.TimeMicro / halfTime);
+                algStats.ExpectedDoublingRatio = Math.Pow(algStats.n, 2) / (Math.Pow((double)algStats.n / 2, 2));
+            }
+            else
+            {
+                algStats.ActualDoublingRatio = -1;
+                algStats.ExpectedDoublingRatio = -1;
+            }
         }
 
         public int CompareTo(MyBigInteger other)
@@ -143,7 +223,16 @@ namespace CSC482_Lab0x05_BigInteger
 
         public override string ToString()
         {
-            return this._value.ToString();
+            if (_value.Length < 12) return _value.ToString();
+            else
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append(_value, 0, 5);
+                sb.Append("...");
+                sb.Append(_value, _value.Length - 5, 5);
+
+                return sb.ToString();
+            }
         }
 
         public static MyBigInteger operator +(MyBigInteger a, MyBigInteger b)
@@ -174,20 +263,6 @@ namespace CSC482_Lab0x05_BigInteger
         private char DigitToAscii(int d)
         {
             return (char)(d + '0');
-        }
-
-        private List<int> B10StringToB32BigInt(string value)
-        {
-            int b10Multiplier = 1;
-            int currentB32Digit = 0;
-            List<int> b32Value = new List<int>();
-
-            for (int i = value.Length - 1; i >= 0; i--, b10Multiplier *= 10)
-            {
-                
-            }
-
-            return b32Value;
         }
     }
 }

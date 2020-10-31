@@ -32,7 +32,7 @@ namespace CSC482_Lab0x05_BigInteger
 
         // To use benchmarker, simply define the delegate with the signature of your algorithm to test and also the data
         // source it will use.
-        internal delegate MyBigInteger Algorithm(int x);
+        internal delegate MyBigInteger Algorithm(MyBigInteger x, MyBigInteger y);
         // The algorithms are responsible for defining their own doubling ratio calculator
         internal delegate void DoublingCalculator(AlgStats stats);
 
@@ -80,8 +80,10 @@ namespace CSC482_Lab0x05_BigInteger
                 long tickCounter = 0;
                 while (testCount <= maxTest && TicksToMicroseconds(tickCounter) < MaxMicroSecondsPerIteration)
                 {
+                    MyBigInteger randBigInt = new MyBigInteger(n);
+                    MyBigInteger randBigIntB = new MyBigInteger(n);
                     _stopwatch.Restart();
-                    currentStats.AlgResult = algorithm(n);
+                    currentStats.AlgResult = algorithm(randBigInt, randBigIntB);
                     _stopwatch.Stop();
                     tickCounter += _stopwatch.ElapsedTicks;
                     testCount++;
